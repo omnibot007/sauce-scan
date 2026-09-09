@@ -60,6 +60,61 @@ flagged, not silently ranked.
 outranked a project literally described as *"durable agent memory, provenance, trust."*
 Popularity is not fitness.
 
+## omnithief — the all-out hunt
+
+```bash
+omnithief "<hunt>" --framings "<take>" --framings "<take>" --budget 15m
+omnithief --ledger --tags eco:rust,dom:recovery     # query, ZERO network
+omnithief --stats
+```
+
+Scans wide across many framings, labels everything deterministically, writes the **whole
+haul to the loot ledger**, and returns two pages.
+
+**The architecture solves one problem: a thousand candidates is unreadable and would cost
+~100k tokens of context to hold.** So the haul never reaches your terminal. It goes to
+the ledger — labelled, queryable, permanent — and you read a synthesis. Memory is the
+answer to context.
+
+**The framings are the intelligence.** Volume alone is noise. Volume across genuinely
+different framings is where the unexpected steal lives:
+
+| framing | example |
+|---|---|
+| the mechanism | `supervisor failure recovery` |
+| the category | `multi agent orchestration` |
+| the failure it prevents | `stalled worker timeout` |
+| **the adjacent domain** | `process supervision restart watchdog` |
+
+That last row is the one that pays. Supervision trees, circuit breakers and watchdogs
+solved agent supervision decades before agents existed. Measured: the adjacent-domain
+framing surfaced `heartbeat-rs`, `ogre-watchdog` and `procman` — none of which any
+"agent" phrasing found.
+
+### What comes back
+
+`clusters` (how many schools of thought) · **`gaps`** (crowded vs sparse — *the sparse
+ones are the opportunity*) · `convergent` · **`laterals`** (different vocabulary, same
+problem) · `graveyard` (what was tried and abandoned) · `vocabulary` · `takeables`.
+
+### Labels are COMPUTED, never inferred
+
+Zero model calls. A thousand LLM labelling calls would cost an hour and blow the budget
+the design exists to respect. Everything derives from metadata already in hand:
+`lic:` `age:` `eco:` `dom:` `conv:` `fr:` `has:` `use:` `lateral`.
+
+`fr:single-framing` is the sleeper — it flags a candidate that exactly one framing found,
+which is how an adjacent-domain steal announces itself instead of being hoped for.
+
+### Budget
+
+Measured 2026-09-09: **404 candidates across 3 framings in 37 seconds.** The keyless
+surfaces are generous (npm 250 rows/363ms; hf, hn, openalex, swh 200 each; a 12-call
+burst throttled zero times). The only wall is `gh` search at **30 requests/minute**, and
+that is per-TOKEN — so splitting across parallel workers does not raise it. Ten workers
+share one bucket and all ten get refused. The budget spends it deliberately instead, and
+**refuses a batch rather than overrunning your stated ceiling.**
+
 ## Loot memory
 
 ```bash

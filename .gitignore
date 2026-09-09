@@ -2,3 +2,5 @@ node_modules/
 *.log
 
 COMMIT_MSG.txt
+node_modules/
+package-lock.json

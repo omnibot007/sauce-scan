@@ -1,0 +1,42 @@
+{
+  "name": "@omninbot/sauce-scan",
+  "version": "0.2.0",
+  "description": "Multi-surface code discovery with convergence ranking and a labelled loot ledger. GitHub search is one population, not the population.",
+  "license": "MIT",
+  "author": "omninbot",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "bin": {
+    "sauce-scan": "./sauce-scan.mjs",
+    "omnithief": "./omnithief.mjs"
+  },
+  "files": [
+    "src",
+    "sauce-scan.mjs",
+    "omnithief.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "code-search",
+    "discovery",
+    "sourcegraph",
+    "software-heritage",
+    "prior-art",
+    "research"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omnibot007/sauce-scan.git"
+  },
+  "homepage": "https://github.com/omnibot007/sauce-scan#readme",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.4"
+  }
+}
