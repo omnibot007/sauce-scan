@@ -452,13 +452,18 @@ function converge(rows, priors, query = '') {
     }
     if (c.surfaces.has('hn')) reasons.push('HN discussion — read for criticism');
 
-    // Relevance gates everything above it. A hugely popular project that does not
-    // match the take is not a better donor than a small one that does.
+    // Relevance sets READING ORDER. It does not gate.
+    //
+    // Discovery is a recall problem, not a precision problem: reading a bad candidate
+    // costs seconds, missing a good one costs the idea. A project that solves your
+    // problem in vocabulary you did not think of will always score low on term overlap
+    // -- that is the lateral find, and burying it is the worst failure this tool has.
+    // So relevance nudges the sort and NOTHING is ever hidden.
     const rel = relevanceOf(query, c);
     c.relevance = rel;
-    score = score * (0.25 + 0.75 * rel);
+    score = score * (0.6 + 0.4 * rel);
     if (rel >= 0.99) reasons.push('matches the take fully');
-    else if (rel <= 0.34) reasons.push(`weak match (${Math.round(rel * 100)}%)`);
+    else if (rel <= 0.34) reasons.push(`lateral (${Math.round(rel * 100)}% term overlap) — read anyway`);
 
     const prior = priors.get(c.key.toLowerCase()) ?? priors.get(c.name.toLowerCase());
     if (prior !== undefined) {
@@ -500,7 +505,11 @@ async function resolveLicenses(cands, cap = 12) {
 /* ------------------------------------------------------------------- output */
 
 function render(query, cands, empty, failed, top) {
-  const out = [`SAUCE SCAN: "${query}"   ${cands.length} candidates, ranked by convergence`];
+  const shown = Math.min(top, cands.length);
+  const out = [
+    `SAUCE SCAN: "${query}"   ${cands.length} candidates found, showing ${shown}`,
+    cands.length > shown ? `(raise --top to see all ${cands.length})` : '',
+  ].filter(Boolean);
   for (const c of cands.slice(0, top)) {
     out.push('');
     const head = [`${String(c.score).padStart(4)}  ${c.name}`];
@@ -545,10 +554,14 @@ async function main() {
   if (query.length === 0 || has('help')) {
     process.stdout.write(
       [
-        'sauce-scan <query> [--surfaces a,b,c] [--limit N] [--top N] [--json]',
+        'sauce-scan <query> [--surfaces a,b,c] [--limit N] [--top N] [--narrow] [--json]',
         'sauce-scan --remember <donor> --verdict took|rejected|pending --why "<reason>"',
         '',
         `surfaces: ${Object.keys(SURFACES).join(', ')}   (default: all)`,
+        '',
+        'Defaults are WIDE: --limit 15 per surface, --top 60, and the take is re-run at',
+        'three phrasings automatically. Pass --narrow for a single pass.',
+        'NOTHING is ever hidden by relevance -- it only sets reading order.',
         '',
         'code/ghcode = search the MECHANISM, not the project name. Two engines.',
         'hn          = the CRITICISM surface. What broke for somebody.',
@@ -565,28 +578,40 @@ async function main() {
     return;
   }
 
-  const limit = Number(get('limit', 6)) || 6;
-  const top = Number(get('top', 10)) || 10;
+  // Defaults are WIDE on purpose. A haul you can skim beats a shortlist you trust.
+  const limit = Number(get('limit', 15)) || 15;
+  const top = Number(get('top', 60)) || 60;
   const want = String(get('surfaces', Object.keys(SURFACES).join(','))).split(',');
   const chosen = want.filter((s) => s in SURFACES);
 
+  // --wide re-runs every surface against narrower phrasings of the same take. Different
+  // term counts hit different indexes; the union is strictly bigger than any one pass.
+  const queries = has('narrow')
+    ? [query]
+    : [...new Set([query, headTerms(query, 2), headTerms(query, 1)])];
+
+  const passes = [];
+  for (const q of queries) passes.push(...chosen.map((s) => ({ s, q })));
+
   const [settled, priors] = await Promise.all([
-    Promise.allSettled(chosen.map((s) => SURFACES[s](query, limit))),
+    Promise.allSettled(passes.map((p) => SURFACES[p.s](p.q, limit))),
     loadPriors(),
   ]);
 
   const rows = [];
   const failed = [];
-  const empty = [];
+  const produced = new Set();
   for (let i = 0; i < settled.length; i += 1) {
     const r = settled[i];
+    const { s } = passes[i];
     if (r.status !== 'fulfilled') {
-      failed.push(`${chosen[i]}(${String(r.reason?.message ?? 'error')})`);
+      failed.push(`${s}(${String(r.reason?.message ?? 'error')})`);
       continue;
     }
-    if (r.value.length === 0) empty.push(chosen[i]);
+    if (r.value.length > 0) produced.add(s);
     rows.push(...r.value);
   }
+  const empty = chosen.filter((s) => !produced.has(s) && !failed.some((f) => f.startsWith(`${s}(`)));
 
   const cands = converge(rows, priors, query);
   if (!has('no-license')) await resolveLicenses(cands);
