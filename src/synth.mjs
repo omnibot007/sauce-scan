@@ -115,13 +115,64 @@ export function convergent(rows, limit = 15) {
 
   return rows
     .filter((r) => buildSurfaces(r).length >= 1)
-    .filter((r) => buildSurfaces(r).length >= 2 || (r.framings?.length ?? 0) >= 3)
+    .filter((r) => buildSurfaces(r).length >= 2 || corroborated(r))
     .toSorted((a, b) => {
-      const av = buildSurfaces(a).length * 2 + (a.framings?.length ?? 0);
-      const bv = buildSurfaces(b).length * 2 + (b.framings?.length ?? 0);
+      const av = buildSurfaces(a).length * 2 + (a.framings?.length ?? 0) * sizeFactor(a);
+      const bv = buildSurfaces(b).length * 2 + (b.framings?.length ?? 0) * sizeFactor(b);
       return bv - av || b.score - a.score;
     })
     .slice(0, limit);
+}
+
+/**
+ * A single-surface row needs INDEPENDENT corroboration before its framing count counts
+ * as agreement. This mirrors the rule `laterals()` already enforces, and it is the same
+ * bug in a different section: an index that answers everything makes any query look
+ * convergent.
+ *
+ * Measured on 2,072 real ledger rows: the OLD rule (`>=2 surfaces OR >=3 framings`)
+ * admitted 14 rows, and ALL 14 came in on framings alone with exactly one surface --
+ * `deepseek-ai/deepseek-harness` at 9 framings on `npm` and nothing else. Zero rows had
+ * two build surfaces, so the surface branch was dead code and the whole CONVERGENT
+ * section was the artefact class.
+ *
+ * A mechanism tag, a real code match, or proven usage is evidence a human did not
+ * fabricate. A framing count on one surface is not.
+ */
+function corroborated(r) {
+  const tags = r.tags ?? [];
+  const domains = tags.filter((t) => t.startsWith('dom:'));
+  const hasSignal =
+    domains.length > 0 || tags.includes('has:code-match') || tags.includes('use:proven');
+  if (!hasSignal || (r.framings?.length ?? 0) < 3) return false;
+
+  // THE TELL, and the reason a single-signal filter was not enough. A huge repository
+  // does not merely inflate its framing count -- it SATURATES every signal the ranker
+  // has. Measured: `deepseek-ai/deepseek-harness` survived a mechanism-tag requirement
+  // carrying SIX tags at once -- dom:graph, dom:isolation, dom:orchestration,
+  // dom:storage, dom:streaming and use:proven.
+  //
+  // So breadth is evidence AGAINST relevance, not for it. A focused tool answers one or
+  // two domains. A repo that answers five unrelated ones is not convergent with your
+  // hunt; it is simply large enough to intersect anything. Same shape as the papers bug:
+  // a source that answers everything tells you nothing.
+  return domains.length <= 2;
+}
+
+/**
+ * A giant repository matches almost any query, so its framing count is not agreement.
+ * Measured: `deepseek-ai/deepseek-harness` (217,603 stars) matched 9 of 12 framings.
+ *
+ * NOTE, verified: `makeRecord()` does not persist `stars`, so every ledger row reads 0
+ * here and this factor is inert in `--ledger` mode. It fires at scan time only. That is
+ * exactly why the fix above does NOT depend on it -- a size penalty alone would have
+ * looked correct in a unit test and done nothing where the tool is actually used.
+ */
+function sizeFactor(r) {
+  const stars = r.stars ?? 0;
+  if (stars >= 100_000) return 0.25;
+  if (stars >= 20_000) return 0.5;
+  return 1;
 }
 
 /**
