@@ -115,10 +115,15 @@ const buildSurfaces = (r) => (r.surfaces ?? []).filter((s) => BUILD.has(s));
  * TRUE convergence: the same project found independently by TWO OR MORE build surfaces.
  *
  * This is now the whole definition, and it is deliberately strict. The previous rule was
- * `>=2 surfaces OR >=3 framings`, and the OR is what broke it -- measured over 11,711
- * ledger rows, only 34 (0.29%) ever reach two surfaces, so every row that ever appeared
- * in this section arrived through the framings branch instead. The section labelled
- * "near-certain relevance" was, in practice, 100% breadth-of-match artefacts.
+ * `>=2 surfaces OR >=3 framings`, and the OR is what broke it: measured across the whole
+ * ledger, WELL UNDER 1% of rows ever reach two surfaces (0.29% when last counted), so
+ * every row that ever appeared in this section arrived through the framings branch
+ * instead. The section labelled "near-certain relevance" was 100% breadth-of-match
+ * artefacts in practice.
+ *
+ * The RATIO is the claim; the row count is a timestamp. `scripts/verify-claims.mjs`
+ * re-checks both against the live ledger, because two absolute counts in this very file
+ * went stale between being measured and being written down.
  *
  * Cross-surface agreement is rare for a STRUCTURAL reason, not a tuning one: the surfaces
  * index disjoint populations. npm indexes npm; crates indexes crates; a Rust crate cannot
@@ -243,8 +248,16 @@ export function laterals(rows, limit = 15) {
     (r.tags ?? []).includes('lateral') || (r.tags ?? []).includes('fr:single-framing');
   const isMechanism = (r) => (r.tags ?? []).some((t) => t.startsWith('dom:'));
 
+  // The SAME saturation guard convergence needed, because this section had the same hole.
+  // Measured: `deepseek-ai/deepseek-harness` led the LATERAL band of the planner hunt
+  // carrying six domain tags. A mechanism requirement cannot discriminate a repo that
+  // satisfies every mechanism. A lateral is a FOCUSED tool found through an unexpected
+  // door -- if it answers five unrelated domains it did not come through a door, it fills
+  // the whole building.
+  const isFocused = (r) => (r.tags ?? []).filter((t) => t.startsWith('dom:')).length <= 2;
+
   return rows
-    .filter((r) => isDifferent(r) && isMechanism(r) && r.score > 0)
+    .filter((r) => isDifferent(r) && isMechanism(r) && isFocused(r) && r.score > 0)
     .toSorted((a, b) => b.score - a.score)
     .slice(0, limit);
 }
