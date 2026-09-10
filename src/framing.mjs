@@ -41,6 +41,10 @@ export const COLONISED = [
   'test', 'tests', 'hook', 'hooks', 'stream', 'node', 'client', 'server', 'manager',
   'handler', 'service', 'selection', 'protocol', 'parser', 'loader', 'builder',
   'helper', 'wrapper', 'adapter', 'provider', 'context', 'state', 'store', 'router',
+  // Measured 2026-09-09: `critical path SLACK estimate schedule` -- scheduling slack,
+  // the oldest term in project planning -- returned slackapi/node-slack-sdk as its
+  // TOP-RANKED hit. A vendor name can colonise a word as hard as a framework can.
+  'slack', 'atlas', 'ember', 'meteor', 'nest', 'next', 'remix', 'prisma', 'astro',
 ];
 
 /**

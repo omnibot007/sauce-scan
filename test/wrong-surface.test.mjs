@@ -42,3 +42,27 @@ describe('wrong-surface — fields that ship papers, not packages', () => {
     }
   });
 });
+
+/**
+ * A VENDOR NAME colonises a word as hard as a framework does. Measured: the framing
+ * `critical path slack estimate schedule` -- scheduling slack, the oldest term in
+ * project planning -- returned slackapi/node-slack-sdk as its top-ranked hit.
+ */
+describe('colonised — vendor names that eat an ordinary word', () => {
+  it('flags scheduling "slack", which returned the Slack SDK', () => {
+    const p = lintFraming('critical path slack estimate schedule');
+    expect(p.map((x) => x.kind)).toContain('colonised');
+    expect(p.find((x) => x.kind === 'colonised').hit).toContain('slack');
+  });
+
+  it('still does not flag the planning framings that worked', () => {
+    for (const f of [
+      'topological sort dependency ordering tasks',
+      'instruction scheduling critical path latency',
+      'motion planning replan when precondition fails',
+      'hierarchical task network decompose subgoals',
+    ]) {
+      expect(kinds(f)).not.toContain('colonised');
+    }
+  });
+});
