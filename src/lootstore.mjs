@@ -145,11 +145,74 @@ export function queryLoot(filter = {}) {
 
 /** Verdicts a human set. These are the ones that must survive every re-harvest. */
 export function judgements() {
-  return readLoot().filter((r) => r.verdict !== 'unseen');
+  return readLoot()
+    .filter((r) => r.verdict !== 'unseen')
+    .toSorted((a, b) => a.atMs - b.atMs);
+}
+
+/**
+ * Set a verdict on a donor, independent of any hunt.
+ *
+ * A judgement is about the DONOR, not about the raid that happened to surface it. Filing
+ * it per-hunt would mean re-litigating the same project every time a new hunt found it.
+ */
+export function recordVerdict(donor, verdict, why = '') {
+  if (!VERDICTS.has(verdict)) throw new Error(`unknown verdict: ${verdict}`);
+  const rec = {
+    donor,
+    verdict,
+    hunt: '_judgements',
+    framings: [],
+    surfaces: [],
+    tags: [`verdict:${verdict}`],
+    score: 0,
+    url: '',
+    summary: why.slice(0, 180),
+    why,
+    atMs: Date.now(),
+  };
+  fs.mkdirSync(lootDir(), { recursive: true });
+  fs.appendFileSync(lootPath(), `${JSON.stringify(rec)}\n`, 'utf8');
+  return rec;
+}
+
+/**
+ * Read the LEGACY custody store too.
+ *
+ * Verdicts used to be written through apex-memory into custody.jsonl under the
+ * `sauce-loot` project, while the ledger reads loot.jsonl. Those two never spoke, so a
+ * judgement recorded by one tool was invisible to the other -- the exact failure the
+ * "gets smarter every time" promise depends on not happening. New writes go to
+ * loot.jsonl; this keeps the old ones alive rather than orphaning them.
+ */
+function legacyVerdicts() {
+  const map = new Map();
+  let text;
+  try {
+    text = fs.readFileSync(path.join(lootDir(), 'custody.jsonl'), 'utf8');
+  } catch {
+    return map;
+  }
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (t.length === 0) continue;
+    try {
+      const row = JSON.parse(t);
+      if (row?.project !== LOOT_PROJECT || typeof row?.text !== 'string') continue;
+      const m = /^(\S+):\s*(took|rejected|pending|unseen)\b\s*[—-]?\s*(.*)$/i.exec(row.text);
+      if (m !== null) {
+        map.set(m[1].toLowerCase(), { verdict: m[2].toLowerCase(), why: m[3] ?? '' });
+      }
+    } catch {
+      continue;
+    }
+  }
+  return map;
 }
 
 export function priorVerdicts() {
-  const map = new Map();
+  // Legacy first so a newer loot.jsonl judgement wins on conflict.
+  const map = legacyVerdicts();
   for (const r of judgements()) map.set(r.donor.toLowerCase(), { verdict: r.verdict, why: r.why ?? '' });
   return map;
 }

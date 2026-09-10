@@ -26,8 +26,9 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { Budget, fmtDuration, parseDuration } from './src/budget.mjs';
+import { renderLint } from './src/framing.mjs';
 import { labelCandidate } from './src/labels.mjs';
-import { harvest, makeRecord, priorVerdicts, queryLoot, stats } from './src/lootstore.mjs';
+import { harvest, makeRecord, priorVerdicts, queryLoot, recordVerdict, stats } from './src/lootstore.mjs';
 import { renderSynthesis, synthesize } from './src/synth.mjs';
 
 const run = promisify(execFile);
@@ -91,6 +92,19 @@ function mergeByDonor(all) {
 }
 
 async function main() {
+  if (has('remember')) {
+    const donor = arg('remember', '');
+    const verdict = arg('verdict', 'pending');
+    const why = arg('why', '');
+    if (!donor) {
+      process.stderr.write('--remember <donor> --verdict took|rejected|pending --why "<reason>"\n');
+      process.exit(1);
+    }
+    const r = recordVerdict(donor, verdict, why);
+    process.stdout.write(`recorded: ${r.donor}: ${r.verdict} — ${r.why}\n`);
+    return;
+  }
+
   if (has('stats')) {
     const s = stats();
     process.stdout.write(
@@ -148,6 +162,16 @@ async function main() {
   const framings = [...new Set([hunt, ...argAll('framings')])];
 
   process.stderr.write(`omnithief: ${framings.length} framings, budget ${fmtDuration(budget.wallMs)}\n`);
+
+  // Lint BEFORE spending the budget. Wording is the single biggest determinant of what a
+  // raid finds -- bigger than surfaces, limits or time. A warned framing still runs
+  // (a noisy hit beats a missed one) but the operator gets told what it will cost.
+  const lint = renderLint(framings);
+  if (lint) process.stderr.write(`${lint}\n\n`);
+  if (has('lint-only')) {
+    process.stdout.write(lint || 'FRAMING LINT: clean\n');
+    return;
+  }
 
   const results = [];
   for (const framing of framings) {
