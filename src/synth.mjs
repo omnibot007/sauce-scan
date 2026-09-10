@@ -8,7 +8,8 @@
  * Six things a corpus can tell you that no single repository can:
  *   clusters      — how many distinct schools of thought exist here
  *   gaps          — what everybody solves vs what almost nobody does  <- the opportunity
- *   convergence   — found by many surfaces AND many framings; near-certain relevance
+ *   convergence   — the same project found by 2+ DISJOINT surfaces; rare (~0.3%) and real
+ *   broad match   — one surface, many framings; central to the hunt, or merely large
  *   laterals      — strong signal, different vocabulary; the unexpected steal
  *   graveyard     — what people tried and abandoned, which is its own answer
  *   vocabulary    — the words this field actually uses, so you know what to search next
@@ -101,26 +102,68 @@ export function gaps(rows) {
 }
 
 /**
- * Found by many surfaces AND many framings. The closest thing to a sure bet.
+ * Only BUILD surfaces can corroborate. Papers are excluded unless the project also
+ * appears somewhere shippable. Measured: arXiv returns recent work for almost any query,
+ * so a paper trivially "converges" across framings -- one raid nominated "Differential
+ * Polarization Calibration: A Consistency Test for Cosmic Birefringence" as convergent
+ * evidence for an eval-harness hunt. Paper convergence is an artefact of the index.
+ */
+const BUILD = new Set(['npm', 'crates', 'pypi', 'repo', 'code', 'ghcode', 'list', 'mcp', 'hf-models', 'hf-spaces']);
+const buildSurfaces = (r) => (r.surfaces ?? []).filter((s) => BUILD.has(s));
+
+/**
+ * TRUE convergence: the same project found independently by TWO OR MORE build surfaces.
  *
- * Papers are EXCLUDED from convergence unless they also appear on a build surface.
- * Measured: arXiv returns recent work for almost any query, so a paper trivially
- * "converges" across framings -- one raid nominated "Differential Polarization
- * Calibration: A Consistency Test for Cosmic Birefringence" as convergent evidence for
- * an eval-harness hunt. Paper convergence is an artefact of the index, not agreement.
+ * This is now the whole definition, and it is deliberately strict. The previous rule was
+ * `>=2 surfaces OR >=3 framings`, and the OR is what broke it -- measured over 11,711
+ * ledger rows, only 34 (0.29%) ever reach two surfaces, so every row that ever appeared
+ * in this section arrived through the framings branch instead. The section labelled
+ * "near-certain relevance" was, in practice, 100% breadth-of-match artefacts.
+ *
+ * Cross-surface agreement is rare for a STRUCTURAL reason, not a tuning one: the surfaces
+ * index disjoint populations. npm indexes npm; crates indexes crates; a Rust crate cannot
+ * appear on npm. So two surfaces agreeing is a real and independent signal -- it means the
+ * project exists in two ecosystems or is both published and readable as source -- but it
+ * can never be the common case.
+ *
+ * **An empty CONVERGENT section is the NORMAL result, not a failure.** That is why it now
+ * reports its own rarity instead of padding itself with whatever matched the most queries.
  */
 export function convergent(rows, limit = 15) {
-  const BUILD = new Set(['npm', 'crates', 'pypi', 'repo', 'code', 'ghcode', 'list', 'mcp', 'hf-models', 'hf-spaces']);
-  const buildSurfaces = (r) => (r.surfaces ?? []).filter((s) => BUILD.has(s));
+  return rows
+    .filter((r) => buildSurfaces(r).length >= 2)
+    .toSorted(
+      (a, b) => buildSurfaces(b).length - buildSurfaces(a).length || b.score - a.score,
+    )
+    .slice(0, limit);
+}
+
+/**
+ * BROAD MATCH: one surface, many framings. This is what used to masquerade as
+ * convergence, and it is a genuinely useful signal -- just a different one.
+ *
+ * Many framings hitting the same project means either "this is central to the hunt" or
+ * "this repo is big enough to intersect anything." `corroborated()` separates those, and
+ * the honest label stops the reader treating the second case as agreement.
+ */
+export function broadMatch(rows, limit = 15) {
+  // The bar is RELATIVE to how many framings were actually cast, never a fixed 3.
+  //
+  // This file already learned this lesson once, in gaps(): "Density is relative or it is
+  // meaningless." An absolute >=3 demands a PERFECT score on a 3-framing raid (measured:
+  // BROAD MATCH came back empty on a real 3-framing run) while being trivial on a
+  // 28-framing one. Same threshold, opposite meanings.
+  const cast = new Set(rows.flatMap((r) => r.framings ?? [])).size;
+  const bar = Math.max(2, Math.ceil(cast * 0.25));
 
   return rows
-    .filter((r) => buildSurfaces(r).length >= 1)
-    .filter((r) => buildSurfaces(r).length >= 2 || corroborated(r))
-    .toSorted((a, b) => {
-      const av = buildSurfaces(a).length * 2 + (a.framings?.length ?? 0) * sizeFactor(a);
-      const bv = buildSurfaces(b).length * 2 + (b.framings?.length ?? 0) * sizeFactor(b);
-      return bv - av || b.score - a.score;
-    })
+    .filter((r) => buildSurfaces(r).length === 1)
+    .filter((r) => corroborated(r, bar))
+    .toSorted(
+      (a, b) =>
+        (b.framings?.length ?? 0) * sizeFactor(b) - (a.framings?.length ?? 0) * sizeFactor(a) ||
+        b.score - a.score,
+    )
     .slice(0, limit);
 }
 
@@ -139,12 +182,12 @@ export function convergent(rows, limit = 15) {
  * A mechanism tag, a real code match, or proven usage is evidence a human did not
  * fabricate. A framing count on one surface is not.
  */
-function corroborated(r) {
+function corroborated(r, bar = 3) {
   const tags = r.tags ?? [];
   const domains = tags.filter((t) => t.startsWith('dom:'));
   const hasSignal =
     domains.length > 0 || tags.includes('has:code-match') || tags.includes('use:proven');
-  if (!hasSignal || (r.framings?.length ?? 0) < 3) return false;
+  if (!hasSignal || (r.framings?.length ?? 0) < bar) return false;
 
   // THE TELL, and the reason a single-signal filter was not enough. A huge repository
   // does not merely inflate its framing count -- it SATURATES every signal the ranker
@@ -258,6 +301,7 @@ export function synthesize(rows, opts = {}) {
     clusters: clusters(rows, opts),
     gaps: gaps(rows, opts),
     convergent: convergent(rows, opts.limit),
+    broadMatch: broadMatch(rows, opts.limit),
     laterals: laterals(rows, opts.limit),
     graveyard: graveyard(rows, opts.limit),
     vocabulary: vocabulary(rows, opts.vocabLimit),
@@ -290,9 +334,21 @@ export function renderSynthesis(s, hunt) {
   out.push(`  SPARSE : ${s.gaps.sparse.map((g) => `${g.domain} ${g.n}`).join(' · ') || '(none)'}`);
   out.push('  Everyone solves the crowded ones. The sparse ones are hard or overlooked.');
 
-  out.push('\n## CONVERGENT — many surfaces AND many framings agree');
+  out.push(`\n## CONVERGENT — the SAME project found by 2+ independent surfaces (${s.convergent.length})`);
+  if (s.convergent.length === 0) {
+    out.push('  none — and that is the NORMAL result, not a miss. Only ~0.3% of harvested');
+    out.push('  rows ever reach two surfaces, because the surfaces index disjoint');
+    out.push('  populations: a Rust crate cannot appear on npm. Read BROAD MATCH instead.');
+  }
   for (const r of s.convergent.slice(0, 8)) {
     out.push(`  ${r.donor}  [${(r.surfaces ?? []).join(',')}]  ${r.summary.slice(0, 80)}`);
+  }
+
+  out.push(`\n## BROAD MATCH — one surface, many framings. Central to the hunt, or merely large (${s.broadMatch.length})`);
+  for (const r of s.broadMatch.slice(0, 8)) {
+    const doms = (r.tags ?? []).filter((t) => t.startsWith('dom:')).length;
+    out.push(`  ${r.donor}  [${(r.framings ?? []).length} framings · ${doms} domain${doms === 1 ? '' : 's'}]`);
+    out.push(`     ${r.summary.slice(0, 84)}`);
   }
 
   out.push('\n## LATERAL — different vocabulary, same problem. READ THESE.');
