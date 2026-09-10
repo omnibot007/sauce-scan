@@ -100,13 +100,25 @@ export function gaps(rows) {
   };
 }
 
-/** Found by many surfaces AND many framings. The closest thing to a sure bet. */
+/**
+ * Found by many surfaces AND many framings. The closest thing to a sure bet.
+ *
+ * Papers are EXCLUDED from convergence unless they also appear on a build surface.
+ * Measured: arXiv returns recent work for almost any query, so a paper trivially
+ * "converges" across framings -- one raid nominated "Differential Polarization
+ * Calibration: A Consistency Test for Cosmic Birefringence" as convergent evidence for
+ * an eval-harness hunt. Paper convergence is an artefact of the index, not agreement.
+ */
 export function convergent(rows, limit = 15) {
+  const BUILD = new Set(['npm', 'crates', 'pypi', 'repo', 'code', 'ghcode', 'list', 'mcp', 'hf-models', 'hf-spaces']);
+  const buildSurfaces = (r) => (r.surfaces ?? []).filter((s) => BUILD.has(s));
+
   return rows
-    .filter((r) => (r.surfaces?.length ?? 0) >= 2 || (r.framings?.length ?? 0) >= 3)
+    .filter((r) => buildSurfaces(r).length >= 1)
+    .filter((r) => buildSurfaces(r).length >= 2 || (r.framings?.length ?? 0) >= 3)
     .toSorted((a, b) => {
-      const av = (a.surfaces?.length ?? 0) + (a.framings?.length ?? 0);
-      const bv = (b.surfaces?.length ?? 0) + (b.framings?.length ?? 0);
+      const av = buildSurfaces(a).length * 2 + (a.framings?.length ?? 0);
+      const bv = buildSurfaces(b).length * 2 + (b.framings?.length ?? 0);
       return bv - av || b.score - a.score;
     })
     .slice(0, limit);
