@@ -43,6 +43,30 @@ export const COLONISED = [
   'helper', 'wrapper', 'adapter', 'provider', 'context', 'state', 'store', 'router',
 ];
 
+/**
+ * Fields that solved your problem in JOURNALS AND PRACTICE, not in packages.
+ *
+ * The adjacent-domain trick has a boundary, and it is this: it only pays when the other
+ * field ALSO SHIPS CODE. Databases, shells, build systems and chess engines pay,
+ * because they publish software. Library science, patent examination, evidence-based
+ * medicine and law solved "find the thing that is worded differently" more rigorously
+ * than any of them -- and shipped none of it to npm.
+ *
+ * Measured: `reference interview question negotiation librarian` returned Inquirer.js
+ * (interactive CLI prompts), d3-array and an HTTP content negotiator.
+ * `patent examiner prior art strategy` returned a trading backtester and a Mermaid
+ * renderer. Zero controlled-vocabulary tooling, because there is none to find.
+ *
+ * These framings are not wrong. They are pointed at the wrong SURFACE.
+ */
+const METHODOLOGY_FIELDS = [
+  'librarian', 'library', 'archivist', 'curator', 'cataloguer', 'cataloger',
+  'examiner', 'patent', 'attorney', 'litigation', 'discovery', 'paralegal',
+  'clinician', 'clinical', 'epidemiology', 'nursing', 'radiologist',
+  'pedagogy', 'ethnography', 'anthropologist', 'historian', 'archaeology',
+  'auditor', 'actuary', 'accountant', 'regulator', 'inspector',
+];
+
 /** Verbs that describe BEHAVIOUR. A framing with one of these is doing it right. */
 const MECHANISM_VERBS = [
   'detect', 'detects', 'recover', 'recovery', 'retry', 'restart', 'resume', 'persist',
@@ -81,6 +105,17 @@ export function lintFraming(framing) {
       hit: colonised,
       why: `"${colonised[0]}" is owned by the JS/TS ecosystem and will drown your meaning`,
       fix: "use the other field's DISTINCTIVE word, not the half it shares with npm",
+    });
+  }
+
+  const methodology = w.filter((x) => METHODOLOGY_FIELDS.includes(x));
+  if (methodology.length > 0) {
+    problems.push({
+      severity: 'medium',
+      kind: 'wrong-surface',
+      hit: methodology,
+      why: `"${methodology[0]}" names a field that ships PAPERS, not packages — a code scan finds nothing`,
+      fix: 'route this framing to --surfaces papers,swh — or borrow from a field that publishes software',
     });
   }
 
